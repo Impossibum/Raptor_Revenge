@@ -8,13 +8,14 @@ from N_Parser import NectoAction
 from rocket_learn.rollout_generator.redis.redis_rollout_worker import RedisRolloutWorker
 from rl_five_reward import RLFiveReward
 from kb_setter import KB_Setter
+from rewards import StarterReward
 import torch
 torch.set_num_threads(1)
 
 if __name__ == "__main__":
-    fps = 120/8
+    fps = 120/6
     send_state = False
-    if len(sys.argv) > 0 and sys.argv[0] == 0:
+    if int(sys.argv[1]) == 0:
         send_state = True
     match = Match(
         game_speed=100,
@@ -24,7 +25,7 @@ if __name__ == "__main__":
         obs_builder=AdvancedBullShitter(),
         action_parser=NectoAction(),
         terminal_conditions=[TimeoutCondition(fps * 300), NoTouchTimeoutCondition(fps * 30), GoalScoredCondition()],
-        reward_function=RLFiveReward()
+        reward_function=StarterReward()
     )
 
     # LINK TO THE REDIS SERVER YOU SHOULD HAVE RUNNING (USE THE SAME PASSWORD YOU SET IN THE REDIS
@@ -42,3 +43,4 @@ if __name__ == "__main__":
                        force_paging=True,
                        auto_minimize=True,
                        local_cache_name="raptor_model_database").run()
+

@@ -210,7 +210,7 @@ class AdvancedBullShitter(ObsBuilder):
         self.TEAMMATE = [0, 0, 1, 0, 0, 0]
         self.OPPONENT = [0, 0, 0, 1, 0, 0]
         self.BOOST = [0, 0, 0, 0, 1, 0]
-        self.dummy_player = [0] * 37
+        self.dummy_player = [0] * 38
         self.boost_locations = np.array(BOOST_LOCATIONS)
         self.inverted_boost_locations = self.boost_locations[::-1]
         self.boost_timers = np.zeros(self.boost_locations.shape[0])
@@ -218,6 +218,7 @@ class AdvancedBullShitter(ObsBuilder):
         self.boosts_availability = np.zeros(self.boost_locations.shape[0])
         self.inverted_boosts_availability = np.zeros(self.boost_locations.shape[0])
         self.state = None
+        from bubo_misc_utils import distance
         #self.expected_count = 34 + 12 + (37*5)
 
     def reset(self, initial_state: GameState):
@@ -272,7 +273,7 @@ class AdvancedBullShitter(ObsBuilder):
             car.forward(),
             car.up(),
             [
-                math.sqrt(sum([x * x for x in car.linear_velocity]))/2300,
+                np.linalg.norm(car.linear_velocity)/2300,
                 player.boost_amount,
                 int(player.on_ground),
                 int(player.has_flip),
@@ -286,12 +287,14 @@ class AdvancedBullShitter(ObsBuilder):
         #return np.array(p, dtype=np.dtype(float)).flatten()
 
     def create_car_packet(self, player_car: PhysicsObject, car: PhysicsObject, _car: PlayerData, ball: PhysicsObject, teammate: bool):
+        diff = car.position - player_car.position
+        magnitude = np.linalg.norm(diff)
         p = [
                 self.TEAMMATE if teammate else self.OPPONENT,
                 car.position / self.POS_STD,
                 car.linear_velocity / self.VEL_STD,
                 car.angular_velocity / self.ANG_STD,
-                (car.position - player_car.position) / self.POS_STD,
+                diff / self.POS_STD,
                 (car.linear_velocity - player_car.linear_velocity) / self.VEL_STD,
                 (ball.position - car.position) / self.POS_STD,
                 (ball.linear_velocity - car.linear_velocity) / self.VEL_STD,
@@ -300,19 +303,23 @@ class AdvancedBullShitter(ObsBuilder):
                 [_car.boost_amount,
                     int(_car.on_ground),
                     int(_car.has_flip),
-                    int(_car.is_demoed)
+                    int(_car.is_demoed),
+                    magnitude/self.POS_STD
                 ]
             ]
-        # 6 + (9*3) + 4 = 37
+        # 6 + (9*3) + 5 = 38
         return list(chain(*p))
         #return tuple(chain(*p))
 
     def create_boost_packet(self, player_car: PhysicsObject, boost_index: int, inverted: bool):
         b_a_l = self.inverted_boosts_availability if inverted else self.boosts_availability
         loc = self.boost_locations[boost_index] if not inverted else self.inverted_boost_locations[boost_index]
+        diff = loc - player_car.position
+        magnitude = np.linalg.norm(diff)
         p = [
-            (loc - player_car.position) / self.POS_STD,
-            [0 if not bool(b_a_l[boost_index]) else (1.0 if loc[2] == 73.0 else 0.12)
+            diff / self.POS_STD,  #direction
+            [0 if not bool(b_a_l[boost_index]) else (1.0 if loc[2] == 73.0 else 0.12), #current boost value
+             magnitude / self.POS_STD  # current distance scaled by pos std
              ]
         ]
         return list(chain(*p))

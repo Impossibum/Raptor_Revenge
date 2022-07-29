@@ -2,7 +2,8 @@ from rlgym.utils.reward_functions import RewardFunction, CombinedReward
 from rlgym.utils.gamestates import GameState, PlayerData
 import numpy as np
 from rewards import JumpTouchReward, TouchVelChange, PositiveWrapperReward, OmniBoostDiscipline, \
-    OncePerStepRewardWrapper, EventReward, MillennialKickoffReward, LavaFloorReward, VelocityBallToGoalReward
+    OncePerStepRewardWrapper, EventReward, MillennialKickoffReward, LavaFloorReward, VelocityBallToGoalReward, \
+    VelocityPlayerToBallReward
 
 
 class SimplifiedBaseReward(RewardFunction):
@@ -32,7 +33,7 @@ class SimplifiedBaseReward(RewardFunction):
             JumpTouchReward(min_height=120),
             #OmniBoostDiscipline(), self.boost_disc_weight
         ),
-            (1.0, 0.5, 0.1, 3.0)))
+            (1.0, 1.0, 0.1, 3.0)))
 
     def reset(self, initial_state: GameState) -> None:
         if self.reward is None:
@@ -50,8 +51,9 @@ class PersonalRewards(RewardFunction): #reward intended soley for the individual
         self.boost_disc_weight = self.boost_weight * 0.02223
         self.reward = CombinedReward(
             (MillennialKickoffReward(),
-             LavaFloorReward()),
-            (0.05, 0.004))
+             LavaFloorReward(),
+             VelocityPlayerToBallReward()),
+            (0.025, 0.001, 0.05))
 
     def reset(self, initial_state: GameState) -> None:
         self.reward.reset(initial_state)

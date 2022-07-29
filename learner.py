@@ -16,6 +16,7 @@ from rocket_learn.utils.stat_trackers.common_trackers import Speed, Demos, Timeo
 from torch.nn.init import xavier_uniform_
 from rl_five_reward import RLFiveReward
 from pathlib import Path
+from rewards import StarterReward
 
 def init_parameters(model):
     r"""Initiate parameters in the transformer model. Taken from PyTorch Transformer impl"""
@@ -32,17 +33,17 @@ def get_latest_model_path():
 
 
 if __name__ == "__main__":
-    run_id = "1762z17y"
-    max_obs_size = 367
-    n_dims = 1514
+    #run_id = "iy7hidfu"
+    run_id = None
+    max_obs_size = 406
+    #n_dims = 1514
     wandb.login(key=os.environ["WANDB_KEY"])
-    logger = wandb.init(project="Raptor", entity="impossibum", id=run_id)
-    redis = Redis(password=os.environ["REDIS"])
+
     def obs():
         return AdvancedBullShitter()
 
     def rew():
-        return RLFiveReward()
+        return StarterReward()
 
     def act():
         return NectoAction()
@@ -52,31 +53,24 @@ if __name__ == "__main__":
         Speed(), Demos(), TimeoutRate(), Touch(), EpisodeLength(), Boost(), BehindBall(), TouchHeight(), DistToBall()
     ]
 
-    frame_skip = 8
+    frame_skip = 6
     half_life_seconds = 10
     fps = 120 / frame_skip
     gamma = np.exp(np.log(0.5) / (fps * half_life_seconds))
     print(f"_gamma is: {gamma}")
     config = dict(
-        actor_lr=5e-5,
-        critic_lr=2e-4,
+        actor_lr=1e-4,
+        critic_lr=1e-4,
         shared_lr=1e-4,
         n_steps=1_000_000,
         batch_size=100_000,
         minibatch_size=50_000,
-        epochs=25,
+        epochs=30,
         gamma=gamma,
         save_every=20,
         model_every=60,
         ent_coef=0.01,
     )
-    rollout_gen = RedisRolloutGenerator("Impossibum", redis, obs, rew, act,
-                                        logger=logger,
-                                        save_every=config["save_every"],
-                                        model_every=config["model_every"],
-                                        clear=run_id is None,
-                                        max_age=1,
-                                        stat_trackers=stat_trackers)
 
     critic = Sequential(
         Linear(512, 512),
@@ -87,9 +81,7 @@ if __name__ == "__main__":
         GELU(),
         Linear(512, 512),
         GELU(),
-        Linear(512, 256),
-        GELU(),
-        Linear(256, 1)
+        Linear(512, 1)
     )
     init_parameters(critic)
     critic = MultiStageCriticWrapper(critic)
@@ -107,9 +99,9 @@ if __name__ == "__main__":
     actor = MultiStageDiscretePolicy(Sequential(
         Linear(512, 512),
         GELU(),
-        Linear(512, 256),
+        Linear(512, 512),
         GELU(),
-        Linear(256, 256),
+        Linear(512, 256),
         GELU(),
         Linear(256, 90)),
         (90,))
@@ -127,21 +119,30 @@ if __name__ == "__main__":
     params = sum([np.prod(p.size()) for p in model_parameters])
     print(f"There are {params} trainable parameters")
 
-    alg = SharedPPO(
-        rollout_gen,
-        agent,
-        ent_coef=config["ent_coef"],
-        n_steps=config["n_steps"],
-        batch_size=config["batch_size"],
-        minibatch_size=config["minibatch_size"],
-        epochs=config["epochs"],
-        gamma=config["gamma"],
-        logger=logger,
-        device="cuda",
-    )
-
     count = 0
     while count < 5:
+        logger = wandb.init(project="Raptor", entity="impossibum", id=run_id)
+        redis = Redis(password=os.environ["redis"])
+        rollout_gen = RedisRolloutGenerator("Raptor", redis, obs, rew, act,
+                                            logger=logger,
+                                            save_every=config["save_every"],
+                                            model_every=config["model_every"],
+                                            clear=run_id is None,
+                                            max_age=1,
+                                            stat_trackers=stat_trackers)
+
+        alg = SharedPPO(
+            rollout_gen,
+            agent,
+            ent_coef=config["ent_coef"],
+            n_steps=config["n_steps"],
+            batch_size=config["batch_size"],
+            minibatch_size=config["minibatch_size"],
+            epochs=config["epochs"],
+            gamma=config["gamma"],
+            logger=logger,
+            device="cuda",
+        )
         try:
             if run_id is not None:
                 alg.load(get_latest_model_path())
@@ -152,4 +153,5 @@ if __name__ == "__main__":
             print(f"ERROR! : {str(e)}")
             print(f"error count: {count}")
 
-    input(f"Exiting training, error count: {count}\n")
+
+input("Press Enter")
