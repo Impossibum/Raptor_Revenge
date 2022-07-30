@@ -13,7 +13,8 @@ import torch
 torch.set_num_threads(1)
 
 if __name__ == "__main__":
-    fps = 120/6
+    tick_skip = 12
+    fps = 120/tick_skip
     send_state = False
     if int(sys.argv[1]) == 0:
         send_state = True
@@ -25,7 +26,8 @@ if __name__ == "__main__":
         obs_builder=AdvancedBullShitter(),
         action_parser=NectoAction(),
         terminal_conditions=[TimeoutCondition(fps * 300), NoTouchTimeoutCondition(fps * 30), GoalScoredCondition()],
-        reward_function=StarterReward()
+        reward_function=StarterReward(),
+        tick_skip=tick_skip
     )
 
     # LINK TO THE REDIS SERVER YOU SHOULD HAVE RUNNING (USE THE SAME PASSWORD YOU SET IN THE REDIS
