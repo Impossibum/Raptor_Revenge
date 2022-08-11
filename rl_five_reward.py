@@ -2,7 +2,7 @@ from rlgym.utils.reward_functions import RewardFunction, CombinedReward
 from rlgym.utils.gamestates import GameState, PlayerData
 import numpy as np
 from rewards import JumpTouchReward, TouchVelChange, PositiveWrapperReward, OmniBoostDiscipline, \
-    OncePerStepRewardWrapper, EventReward, MillennialKickoffReward, LavaFloorReward, VelocityBallToGoalReward, \
+    OncePerStepRewardWrapper, EventReward, KickoffReward, LavaFloorReward, VelocityBallToGoalReward, \
     VelocityPlayerToBallReward
 
 
@@ -11,10 +11,11 @@ class SimplifiedBaseReward(RewardFunction):
         super().__init__()
         self.goal_reward = 10.0
         self.boost_weight = boost_weight
+        self.ts = 12
         self.reward = None
         self.orange_count = 0
         self.blue_count = 0
-        self.boost_disc_weight = self.boost_weight * 0.02223
+        self.boost_disc_weight = self.boost_weight * ((33.3334 / (120/self.ts)) * 0.01)
 
     def setup_reward(self, initial_state: GameState) -> None:
 
@@ -27,13 +28,14 @@ class SimplifiedBaseReward(RewardFunction):
                 self.blue_count += 1
 
         self.reward = OncePerStepRewardWrapper(CombinedReward((
-            EventReward(goal=0, team_goal=self.goal_reward, demo=self.goal_reward/3.0, boost_pickup=self.boost_weight),
-            TouchVelChange(),
+            EventReward(team_goal=self.goal_reward, demo=self.goal_reward/3.0, boost_pickup=self.boost_weight),
             PositiveWrapperReward(VelocityBallToGoalReward()),
+            TouchVelChange(),
             JumpTouchReward(min_height=120),
-            #OmniBoostDiscipline(), self.boost_disc_weight
+            KickoffReward(boost_punish=False),
+            OmniBoostDiscipline(aerial_forgiveness=True)
         ),
-            (1.0, 1.0, 0.1, 3.0)))
+            (1.0, 0.1, 1.0, 3.0, 0.2, self.boost_disc_weight)))
 
     def reset(self, initial_state: GameState) -> None:
         if self.reward is None:
@@ -47,13 +49,15 @@ class SimplifiedBaseReward(RewardFunction):
 class PersonalRewards(RewardFunction): #reward intended soley for the individual and not to be penalized by 0 sum
     def __init__(self, boost_weight=1.0):
         super().__init__()
+        self.ts = 12
         self.boost_weight = boost_weight
-        self.boost_disc_weight = self.boost_weight * 0.02223
+        self.boost_disc_weight = self.boost_weight * ((33.3334 / (120/self.ts)) * 0.01)
         self.reward = CombinedReward(
-            (MillennialKickoffReward(),
-             LavaFloorReward(),
-             VelocityPlayerToBallReward()),
-            (0.025, 0.001, 0.05))
+            (
+                LavaFloorReward(),
+                VelocityPlayerToBallReward()
+            ),
+            (0.003, 0.03334))
 
     def reset(self, initial_state: GameState) -> None:
         self.reward.reset(initial_state)

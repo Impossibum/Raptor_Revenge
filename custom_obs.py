@@ -217,9 +217,10 @@ class AdvancedBullShitter(ObsBuilder):
         self.inverted_boost_timers = np.zeros(self.boost_locations.shape[0])
         self.boosts_availability = np.zeros(self.boost_locations.shape[0])
         self.inverted_boosts_availability = np.zeros(self.boost_locations.shape[0])
+        self.boost_objs = []
+        self.inverted_boost_objs = []
         self.state = None
-        from bubo_misc_utils import distance
-        #self.expected_count = 34 + 12 + (37*5)
+
 
     def reset(self, initial_state: GameState):
         self.state = None
@@ -325,10 +326,25 @@ class AdvancedBullShitter(ObsBuilder):
         return list(chain(*p))
         #return tuple(chain(*p))
 
+    def create_boost_lists(self):
+        normal = []
+        inverted = []
+
+        for i in range(len(self.boosts_availability)):
+            normal.append(0 if not bool(self.boosts_availability[i]) else (1.0 if self.boost_locations[i][2] == 73.0 else 0.12))
+            inverted.append(0 if not bool(self.inverted_boosts_availability[i]) else (1.0 if self.inverted_boost_locations[i][2] == 73.0 else 0.12))
+
+        self.boost_objs = normal
+        self.inverted_boost_objs = inverted
+
     def add_boosts_to_obs(self, obs: List, player_car: PhysicsObject, inverted: bool):
 
-        for i in range(self.boost_locations.shape[0]):
-            obs.extend(self.create_boost_packet(player_car, i, inverted))
+        # for i in range(self.boost_locations.shape[0]):
+        #     obs.extend(self.create_boost_packet(player_car, i, inverted))
+        if inverted:
+            obs.extend(self.inverted_boost_objs)
+        else:
+            obs.extend(self.boost_objs)
 
     def add_players_to_obs(self, obs: Set, state: GameState, player: PlayerData, ball: PhysicsObject,
                            prev_act: np.ndarray, inverted: bool):
@@ -367,6 +383,12 @@ class AdvancedBullShitter(ObsBuilder):
         return player_data
 
     def build_obs(self, player: PlayerData, state: GameState, previous_action: np.ndarray) -> Any:
+        if state != self.state:
+            self.boosts_availability = state.boost_pads
+            self.inverted_boosts_availability = state.inverted_boost_pads
+            self.state = state
+            self.create_boost_lists()
+
         if player.team_num == 1:
             inverted = True
             ball = state.inverted_ball

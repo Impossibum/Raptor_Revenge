@@ -33,9 +33,8 @@ def get_latest_model_path():
 
 
 if __name__ == "__main__":
-    #run_id = "iy7hidfu"
-    run_id = None
-    max_obs_size = 406
+    run_id = "28lt29qo"
+    max_obs_size = 270
     #n_dims = 1514
     wandb.login(key=os.environ["WANDB_KEY"])
 
@@ -43,7 +42,7 @@ if __name__ == "__main__":
         return AdvancedBullShitter()
 
     def rew():
-        return StarterReward()
+        return RLFiveReward()
 
     def act():
         return NectoAction()
@@ -53,22 +52,23 @@ if __name__ == "__main__":
         Speed(), Demos(), TimeoutRate(), Touch(), EpisodeLength(), Boost(), BehindBall(), TouchHeight(), DistToBall()
     ]
 
-    frame_skip = 6
-    half_life_seconds = 10
+    frame_skip = 12
+    half_life_seconds = 8
     fps = 120 / frame_skip
     gamma = np.exp(np.log(0.5) / (fps * half_life_seconds))
     print(f"_gamma is: {gamma}")
+    #freeze started @ iter 3460
     config = dict(
         actor_lr=1e-4,
-        critic_lr=1e-4,
+        critic_lr=3e-4,
         shared_lr=1e-4,
         n_steps=1_000_000,
         batch_size=100_000,
         minibatch_size=50_000,
         epochs=30,
         gamma=gamma,
-        save_every=20,
-        model_every=60,
+        save_every=20, #40
+        model_every=60, #120
         ent_coef=0.01,
     )
 
@@ -101,9 +101,7 @@ if __name__ == "__main__":
         GELU(),
         Linear(512, 512),
         GELU(),
-        Linear(512, 256),
-        GELU(),
-        Linear(256, 90)),
+        Linear(512, 90)),
         (90,))
     init_parameters(actor)
 

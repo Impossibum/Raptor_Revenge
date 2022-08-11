@@ -26,7 +26,7 @@ if __name__ == "__main__":
         obs_builder=AdvancedBullShitter(),
         action_parser=NectoAction(),
         terminal_conditions=[TimeoutCondition(fps * 300), NoTouchTimeoutCondition(fps * 30), GoalScoredCondition()],
-        reward_function=StarterReward(),
+        reward_function=RLFiveReward(),
         tick_skip=tick_skip
     )
 
