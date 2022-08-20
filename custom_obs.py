@@ -210,7 +210,7 @@ class AdvancedBullShitter(ObsBuilder):
         self.TEAMMATE = [0, 0, 1, 0, 0, 0]
         self.OPPONENT = [0, 0, 0, 1, 0, 0]
         self.BOOST = [0, 0, 0, 0, 1, 0]
-        self.dummy_player = [0] * 38
+        self.dummy_player = [0] * 32
         self.boost_locations = np.array(BOOST_LOCATIONS)
         self.inverted_boost_locations = self.boost_locations[::-1]
         self.boost_timers = np.zeros(self.boost_locations.shape[0])
@@ -291,7 +291,7 @@ class AdvancedBullShitter(ObsBuilder):
         diff = car.position - player_car.position
         magnitude = np.linalg.norm(diff)
         p = [
-                self.TEAMMATE if teammate else self.OPPONENT,
+                # self.TEAMMATE if teammate else self.OPPONENT,
                 car.position / self.POS_STD,
                 car.linear_velocity / self.VEL_STD,
                 car.angular_velocity / self.ANG_STD,
@@ -350,35 +350,43 @@ class AdvancedBullShitter(ObsBuilder):
                            prev_act: np.ndarray, inverted: bool):
 
         player_data = self.create_player_packet(player, player.inverted_car_data if inverted else player.car_data, ball, prev_act)
-        b_max = 3
+        a_max = 2
         o_max = 3
-
-        if player.team_num == 0:
-            b_max = 2
-        else:
-            o_max = 2
-
-        b_count = 0
+        a_count = 0
         o_count = 0
+        allies = []
+        opponents = []
 
         for p in state.players:
             if p.car_id == player.car_id:
                 continue
 
-            if p.team_num == 0 and b_count < b_max:
-                b_count += 1
+            if p.team_num == player.team_num and a_count < a_max:
+                a_count += 1
             elif p.team_num == 1 and o_count < o_max:
                 o_count += 1
             else:
                 continue
-            obs.append(self.create_car_packet(player.inverted_car_data if inverted else player.car_data,
-                          p.inverted_car_data if inverted else p.car_data, p, ball, p.team_num == player.team_num))
 
-        for _ in range(b_max - b_count):
-            obs.append(self.dummy_player)
+            if p.team_num == player.team_num:
+                allies.append(self.create_car_packet(player.inverted_car_data if inverted else player.car_data,
+                              p.inverted_car_data if inverted else p.car_data, p, ball, p.team_num == player.team_num))
+            else:
+                opponents.append(self.create_car_packet(player.inverted_car_data if inverted else player.car_data,
+                                                  p.inverted_car_data if inverted else p.car_data, p, ball,
+                                                  p.team_num == player.team_num))
+
+        for _ in range(a_max - a_count):
+            allies.append(self.dummy_player)
 
         for _ in range(o_max - o_count):
-            obs.append(self.dummy_player)
+            opponents.append(self.dummy_player)
+
+        random.shuffle(allies)
+        random.shuffle(opponents)
+
+        obs.extend(allies)
+        obs.extend(opponents)
 
         return player_data
 
@@ -401,7 +409,7 @@ class AdvancedBullShitter(ObsBuilder):
         player_dat = self.add_players_to_obs(players_data, state, player, ball, previous_action, inverted)
         obs.extend(player_dat)
         obs.extend(self.create_ball_packet(ball))
-        random.shuffle(players_data)
+        #random.shuffle(players_data)
         for p in players_data:
             obs.extend(p)
         self.add_boosts_to_obs(obs, player.inverted_car_data if inverted else player.car_data, inverted)

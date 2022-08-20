@@ -5,6 +5,7 @@ from rlgym.utils.state_setters import DefaultState
 from rlgym_tools.extra_state_setters.replay_setter import ReplaySetter
 from rlgym_tools.extra_state_setters.weighted_sample_setter import WeightedSampleSetter
 from rlgym_tools.extra_state_setters.augment_setter import AugmentSetter
+from bum_setters import AerialSetup
 
 
 class KB_Setter(DynamicGMSetter):
@@ -17,9 +18,10 @@ class KB_Setter(DynamicGMSetter):
                 WeightedSampleSetter(
                     (
                         DefaultState(),
-                        AugmentSetter(ReplaySetter(replays[i]))
+                        AugmentSetter(ReplaySetter(replays[i])),
+                        AerialSetup(),
                     ),
-                    (0.1, 0.9)
+                    (0.1, 0.8, 0.1)
                 )
             )
 

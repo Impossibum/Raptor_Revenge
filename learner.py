@@ -2,7 +2,7 @@ import os
 import wandb
 import torch.jit
 import numpy as np
-from torch.nn import Linear, Sequential, GELU
+from torch.nn import Linear, Sequential, Mish
 from redis import Redis
 from custom_obs import AdvancedBullShitter
 from N_Parser import NectoAction
@@ -33,9 +33,9 @@ def get_latest_model_path():
 
 
 if __name__ == "__main__":
-    run_id = "28lt29qo"
-    max_obs_size = 270
-    #n_dims = 1514
+    run_id = "8csek9cp"
+    # run_id = None
+    max_obs_size = 240
     wandb.login(key=os.environ["WANDB_KEY"])
 
     def obs():
@@ -57,50 +57,53 @@ if __name__ == "__main__":
     fps = 120 / frame_skip
     gamma = np.exp(np.log(0.5) / (fps * half_life_seconds))
     print(f"_gamma is: {gamma}")
-    #freeze started @ iter 3460
+    # weights frozen @ 3600 * 100k steps ending 3760
+    # big epochs low lr starting 3760
     config = dict(
-        actor_lr=1e-4,
-        critic_lr=3e-4,
-        shared_lr=1e-4,
+        actor_lr=5e-5,
+        #actor_lr=0.0,
+        critic_lr=2e-4,
+        shared_lr=5e-5,
+        #shared_lr=0.0,
         n_steps=1_000_000,
         batch_size=100_000,
         minibatch_size=50_000,
         epochs=30,
         gamma=gamma,
-        save_every=20, #40
-        model_every=60, #120
+        save_every=20, #20
+        model_every=60, #60
         ent_coef=0.01,
     )
 
     critic = Sequential(
         Linear(512, 512),
-        GELU(),
+        Mish(),
         Linear(512, 512),
-        GELU(),
+        Mish(),
         Linear(512, 512),
-        GELU(),
+        Mish(),
         Linear(512, 512),
-        GELU(),
+        Mish(),
         Linear(512, 1)
     )
     init_parameters(critic)
     critic = MultiStageCriticWrapper(critic)
 
     shared = Sequential(
-        Linear(max_obs_size, 1024),
-        GELU(),
-        Linear(1024, 512),
-        GELU(),
+        Linear(max_obs_size, 512),
+        Mish(),
         Linear(512, 512),
-        GELU()
+        Mish(),
+        Linear(512, 512),
+        Mish()
     )
     init_parameters(shared)
 
     actor = MultiStageDiscretePolicy(Sequential(
         Linear(512, 512),
-        GELU(),
+        Mish(),
         Linear(512, 512),
-        GELU(),
+        Mish(),
         Linear(512, 90)),
         (90,))
     init_parameters(actor)

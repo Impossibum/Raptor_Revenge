@@ -80,14 +80,15 @@ class StarterReward(RewardFunction):
         self.boost_weight = 0.1
         self.rew = CombinedReward(
             (
-                EventReward(team_goal=self.goal_reward, concede=-self.goal_reward, demo=self.goal_reward/3, boost_pickup=self.boost_weight),
+                EventReward(team_goal=self.goal_reward, concede=-self.goal_reward, demo=self.goal_reward/3),
                 TouchVelChange(),
                 VelocityBallToGoalReward(),
+                VelocityPlayerToBallReward(),
                 JumpTouchReward(min_height=120),
-                KickoffReward(boost_punish=False),
-                VelocityPlayerToBallReward()
+                KickoffReward(boost_punish=False)
             ),
-            (1.0, 1.0, 0.1, 2.0, 0.3334, 0.05))
+            (1.0, 1.5, 0.075, 0.075, 2.0, 0.1))
+            #(1.0, 1.0, 0.1, 2.0, 0.3334, 0.05))
 
     def reset(self, initial_state: GameState):
         self.rew.reset(initial_state)
@@ -347,14 +348,12 @@ class AerialTraining(RewardFunction):
         self, player: PlayerData, state: GameState, previous_action: np.ndarray
     ) -> float:
         if (
-            not player.on_ground
-            and state.ball.position[2] > self.ball_height_min
-            and player.car_data.position[2] > self.player_min_height
-            and state.ball.position[2] > player.car_data.position[2]
-            and player.car_data.linear_velocity[2] > 0
+                not player.on_ground
+                and state.ball.position[2] > self.ball_height_min
+                and self.player_min_height < player.car_data.position[2] < state.ball.position[2]
         ):
             divisor = max(1, distance(player.car_data.position, state.ball.position)/1000)
-            return max((0, self.vel_reward.get_reward(player, state, previous_action)/divisor))
+            return self.vel_reward.get_reward(player, state, previous_action)/divisor
 
         return 0
 

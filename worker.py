@@ -5,7 +5,8 @@ from rlgym.envs import Match
 from rlgym.utils.terminal_conditions.common_conditions import TimeoutCondition, NoTouchTimeoutCondition, GoalScoredCondition
 from custom_obs import AdvancedBullShitter
 from N_Parser import NectoAction
-from rocket_learn.rollout_generator.redis.redis_rollout_worker import RedisRolloutWorker
+#from rocket_learn.rollout_generator.redis.redis_rollout_worker import RedisRolloutWorker
+from redis_rollout_worker import RedisRolloutWorker
 from rl_five_reward import RLFiveReward
 from kb_setter import KB_Setter
 from rewards import StarterReward
@@ -16,8 +17,9 @@ if __name__ == "__main__":
     tick_skip = 12
     fps = 120/tick_skip
     send_state = False
+    cache_writer = False
     if int(sys.argv[1]) == 0:
-        send_state = True
+        cache_writer = True
     match = Match(
         game_speed=100,
         spawn_opponents=True,
@@ -34,7 +36,7 @@ if __name__ == "__main__":
     # CONFIG)
     r = Redis(host="127.0.0.1", password=os.environ["redis"])
 
-    RedisRolloutWorker(r, "Impossibum", match,
+    RedisRolloutWorker(r, "Contributor name", match,
                        past_version_prob=0.0,
                        evaluation_prob=0.0,
                        sigma_target=2,
@@ -44,5 +46,6 @@ if __name__ == "__main__":
                        send_gamestates=send_state,
                        force_paging=True,
                        auto_minimize=True,
-                       local_cache_name="raptor_model_database").run()
+                       local_cache_name="raptor_model_database",
+                       cache_writer=cache_writer).run()
 

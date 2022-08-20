@@ -3,7 +3,7 @@ from rlgym.utils.gamestates import GameState, PlayerData
 import numpy as np
 from rewards import JumpTouchReward, TouchVelChange, PositiveWrapperReward, OmniBoostDiscipline, \
     OncePerStepRewardWrapper, EventReward, KickoffReward, LavaFloorReward, VelocityBallToGoalReward, \
-    VelocityPlayerToBallReward
+    VelocityPlayerToBallReward, AerialTraining
 
 
 class SimplifiedBaseReward(RewardFunction):
@@ -15,7 +15,7 @@ class SimplifiedBaseReward(RewardFunction):
         self.reward = None
         self.orange_count = 0
         self.blue_count = 0
-        self.boost_disc_weight = self.boost_weight * ((33.3334 / (120/self.ts)) * 0.01)
+        self.boost_disc_weight = self.boost_weight * ((33.3334 / (120/self.ts)) * 0.1)
 
     def setup_reward(self, initial_state: GameState) -> None:
 
@@ -35,7 +35,7 @@ class SimplifiedBaseReward(RewardFunction):
             KickoffReward(boost_punish=False),
             OmniBoostDiscipline(aerial_forgiveness=True)
         ),
-            (1.0, 0.1, 1.0, 3.0, 0.2, self.boost_disc_weight)))
+            (1.0, 0.075, 1.0, 3.0, 0.1, self.boost_disc_weight)))
 
     def reset(self, initial_state: GameState) -> None:
         if self.reward is None:
@@ -51,13 +51,14 @@ class PersonalRewards(RewardFunction): #reward intended soley for the individual
         super().__init__()
         self.ts = 12
         self.boost_weight = boost_weight
-        self.boost_disc_weight = self.boost_weight * ((33.3334 / (120/self.ts)) * 0.01)
+        self.boost_disc_weight = self.boost_weight * ((33.3334 / (120/self.ts)) * 0.1)
         self.reward = CombinedReward(
             (
                 LavaFloorReward(),
-                VelocityPlayerToBallReward()
+                VelocityPlayerToBallReward(),
+                PositiveWrapperReward(AerialTraining()),
             ),
-            (0.003, 0.03334))
+            (0.008, 0.035, 0.1))
 
     def reset(self, initial_state: GameState) -> None:
         self.reward.reset(initial_state)
