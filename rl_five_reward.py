@@ -15,7 +15,7 @@ class SimplifiedBaseReward(RewardFunction):
         self.reward = None
         self.orange_count = 0
         self.blue_count = 0
-        self.boost_disc_weight = self.boost_weight * ((33.3334 / (120/self.ts)) * 0.1)
+        self.boost_disc_weight = self.boost_weight * ((33.3334 / (120/self.ts)) * 0.01)
 
     def setup_reward(self, initial_state: GameState) -> None:
 
@@ -51,7 +51,7 @@ class PersonalRewards(RewardFunction): #reward intended soley for the individual
         super().__init__()
         self.ts = 12
         self.boost_weight = boost_weight
-        self.boost_disc_weight = self.boost_weight * ((33.3334 / (120/self.ts)) * 0.1)
+        self.boost_disc_weight = self.boost_weight * ((33.3334 / (120/self.ts)) * 0.01)
         self.reward = CombinedReward(
             (
                 LavaFloorReward(),
