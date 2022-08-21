@@ -24,17 +24,19 @@ from rocket_learn.utils.dynamic_gamemode_setter import DynamicGMSetter
 
 def rollout_uploader(redis, q):
     unsent_rollouts = deque([], maxlen=100)
-    print("thread created")
     while True:
         while q.qsize() != 0:
             unsent_rollouts.append(q.get())
 
         if len(unsent_rollouts) > 0:
-            rollout_bytes = unsent_rollouts.popleft()
-            n_items = redis.rpush(ROLLOUTS, rollout_bytes)
-            if n_items >= 1000:
-                print("Had to limit rollouts. Learner may have have crashed, or is overloaded")
-                redis.ltrim(ROLLOUTS, -100, -1)
+            for _ in range(len(unsent_rollouts)):
+                rollout_bytes = unsent_rollouts.popleft()
+                n_items = redis.rpush(ROLLOUTS, rollout_bytes)
+                if n_items >= 1000:
+                    print("Had to limit rollouts. Learner may have have crashed, or is overloaded")
+                    redis.ltrim(ROLLOUTS, -100, -1)
+        else:
+            time.sleep(1)
 
 
 
@@ -227,39 +229,38 @@ class RedisRolloutWorker:
 
 
     #@functools.lru_cache(maxsize=8)
-    def _get_latest_model(self, version):
+    def _get_latest_model(self, version, current_model):
         # if version in local database, query from database
         # if not, pull from REDIS and store in disk cache
 
         models = self.sql.execute("SELECT parameters FROM MODELS WHERE id == ?", (version,)).fetchall()
-        # if not self.cache_writer:
-        #     if len(models) == 0:
-
-                # time.sleep(1)
-                # models = self.sql.execute("SELECT parameters FROM MODELS WHERE id == ?", (version,)).fetchall()
-        if len(models) == 0:
-            if not self.cache_writer:
+        if not self.cache_writer:
+            if len(models) == 0:
                 return None
-            bytestream = self.redis.get(MODEL_LATEST)
-            model = _unserialize_model(bytestream)
-
-            self.sql.execute('INSERT INTO MODELS (id, parameters) VALUES (?, ?)', (version, bytestream))
-            self.sql.commit()
-
-            previous_check = self.sql.execute("SELECT parameters FROM MODELS WHERE id == ?", (version + 2,)).fetchall()
-            if len(previous_check) > 0:
-                self.sql.execute(f"DELETE FROM MODELS WHERE id == '{version + 2}'")
-                self.sql.commit()
-                # self.sql.execute(f"DELETE id FROM MODELS WHERE id == '{version + 2}'")
-                # self.sql.commit()
         else:
-            # should only ever be 1 version of parameters
-            assert len(models) <= 1
-            # stored as tuple due to sqlite,
-            assert len(models[0]) == 1
+            if len(models) == 0:
 
-            bytestream = models[0][0]
-            model = _unserialize_model(bytestream)
+                bytestream = self.redis.get(MODEL_LATEST)
+                model = _unserialize_model(bytestream)
+
+                self.sql.execute('INSERT INTO MODELS (id, parameters) VALUES (?, ?)', (version, bytestream))
+                self.sql.commit()
+
+                previous_check = self.sql.execute("SELECT parameters FROM MODELS WHERE id == ?", (version + 2,)).fetchall()
+                if len(previous_check) > 0:
+                    self.sql.execute(f"DELETE FROM MODELS WHERE id == '{version + 2}'")
+                    self.sql.commit()
+                    # self.sql.execute(f"DELETE id FROM MODELS WHERE id == '{version + 2}'")
+                    # self.sql.commit()
+                return model
+
+        # should only ever be 1 version of parameters
+        assert len(models) <= 1
+        # stored as tuple due to sqlite,
+        assert len(models[0]) == 1
+
+        bytestream = models[0][0]
+        model = _unserialize_model(bytestream)
 
         return model
 
@@ -288,7 +289,7 @@ class RedisRolloutWorker:
             # Only try to download latest version when new
             if latest_version != available_version:
                 if self.local_cache_name:
-                    updated_agent = self._get_latest_model(available_version)
+                    updated_agent = self._get_latest_model(available_version, self.current_agent)
                 else:
                     model_bytes = self.redis.get(MODEL_LATEST)
                     if model_bytes is None:
@@ -296,9 +297,9 @@ class RedisRolloutWorker:
                         continue  # This is maybe not necessary? Can't hurt to leave it in.
                     updated_agent = _unserialize_model(model_bytes)
 
-                # if updated_agent is not None:
-                latest_version = available_version
-                self.current_agent = updated_agent
+                if updated_agent is not None:
+                    latest_version = available_version
+                    self.current_agent = updated_agent
 
             n += 1
             pretrained_choice = None
@@ -383,7 +384,7 @@ class RedisRolloutWorker:
                                             self.send_obs, self.send_gamestates, True))
 
                 def send():
-                    self.rollout_q.put(rollout_bytes)
+                    self.rollout_q.put_nowait(rollout_bytes)
 
                 send()
 
