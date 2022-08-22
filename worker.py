@@ -11,15 +11,19 @@ from rl_five_reward import RLFiveReward
 from kb_setter import KB_Setter
 from rewards import StarterReward
 import torch
+#import faulthandler
 torch.set_num_threads(1)
 
+
 if __name__ == "__main__":
+    #faulthandler.enable()
     tick_skip = 12
     fps = 120/tick_skip
     send_state = False
     cache_writer = False
     if int(sys.argv[1]) == 0:
-        cache_writer = True
+    	send_state = True
+    	cache_writer = True
     match = Match(
         game_speed=100,
         spawn_opponents=True,
@@ -27,16 +31,21 @@ if __name__ == "__main__":
         state_setter=KB_Setter(),
         obs_builder=AdvancedBullShitter(),
         action_parser=NectoAction(),
-        terminal_conditions=[TimeoutCondition(fps * 300), NoTouchTimeoutCondition(fps * 30), GoalScoredCondition()],
+        terminal_conditions=[TimeoutCondition(fps * 300), NoTouchTimeoutCondition(fps * 45), GoalScoredCondition()],
         reward_function=RLFiveReward(),
         tick_skip=tick_skip
     )
 
     # LINK TO THE REDIS SERVER YOU SHOULD HAVE RUNNING (USE THE SAME PASSWORD YOU SET IN THE REDIS
     # CONFIG)
-    r = Redis(host="127.0.0.1", password=os.environ["redis"])
+    redis_info = {
+        "host": "127.0.0.1",
+        "password": os.environ["redis"],
+    }
 
-    RedisRolloutWorker(r, "Contributor name", match,
+    r = Redis(host=redis_info["host"], password=redis_info["password"])
+
+    RedisRolloutWorker(r, "Impossibum", match,
                        past_version_prob=0.0,
                        evaluation_prob=0.0,
                        sigma_target=2,
@@ -47,5 +56,7 @@ if __name__ == "__main__":
                        force_paging=True,
                        auto_minimize=True,
                        local_cache_name="raptor_model_database",
+                       redis_info=redis_info,
+                       #local_cache_name=None,
                        cache_writer=cache_writer).run()
 

@@ -2,8 +2,7 @@ import functools
 import itertools
 import os
 import time
-from threading import Thread
-from queue import Queue
+from multiprocessing import Process, Pipe
 from collections import deque
 from uuid import uuid4
 import sqlite3 as sql
@@ -12,7 +11,6 @@ from redis import Redis
 from rlgym.envs import Match
 from rlgym.gamelaunch import LaunchPreference
 from rlgym.gym import Gym
-
 import rocket_learn.agent.policy
 import rocket_learn.utils.generate_episode
 from rocket_learn.rollout_generator.redis.utils import _unserialize_model, MODEL_LATEST, WORKER_IDS, OPPONENT_MODELS, \
@@ -22,11 +20,12 @@ from rocket_learn.utils.util import probability_NvsM
 from rocket_learn.utils.dynamic_gamemode_setter import DynamicGMSetter
 
 
-def rollout_uploader(redis, q):
+def rollout_uploader(redis_info, q):
+    redis = Redis(host=redis_info["host"], password=redis_info["password"])
     unsent_rollouts = deque([], maxlen=100)
     while True:
-        while q.qsize() != 0:
-            unsent_rollouts.append(q.get())
+        while q.poll():
+            unsent_rollouts.append(q.recv())
 
         if len(unsent_rollouts) > 0:
             for _ in range(len(unsent_rollouts)):
@@ -67,7 +66,7 @@ class RedisRolloutWorker:
                  dynamic_gm=True, streamer_mode=False, send_gamestates=True,
                  send_obs=True, scoreboard=None, pretrained_agents=None,
                  human_agent=None, force_paging=False, auto_minimize=True,
-                 local_cache_name=None, cache_writer=True):
+                 local_cache_name=None, redis_info=None, cache_writer=True):
         # TODO model or config+params so workers can recreate just from redis connection?
         self.redis = redis
         self.name = name
@@ -100,8 +99,9 @@ class RedisRolloutWorker:
 
         self.uuid = str(uuid4())
         self.redis.rpush(WORKER_IDS, self.uuid)
-        self.rollout_q = Queue()
-        self.rollout_uploader = Thread(target=rollout_uploader, args=(self.redis, self.rollout_q), daemon=True)
+        rollout_local, rollout_p = Pipe()
+        self.rollout_q = rollout_local
+        self.rollout_uploader = Process(target=rollout_uploader, args=(redis_info, rollout_p), daemon=True)
         self.rollout_uploader.start()
 
 
@@ -384,7 +384,7 @@ class RedisRolloutWorker:
                                             self.send_obs, self.send_gamestates, True))
 
                 def send():
-                    self.rollout_q.put_nowait(rollout_bytes)
+                    self.rollout_q.send(rollout_bytes)
 
                 send()
 
