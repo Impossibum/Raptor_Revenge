@@ -18,10 +18,17 @@ from rocket_learn.rollout_generator.redis.utils import _unserialize_model, MODEL
     EXPERIENCE_PER_MODE
 from rocket_learn.utils.util import probability_NvsM
 from rocket_learn.utils.dynamic_gamemode_setter import DynamicGMSetter
+from redis.retry import Retry
+from redis.backoff import ExponentialBackoff
+from redis.exceptions import ConnectionError, TimeoutError
 
 
 def rollout_uploader(redis_info, q):
-    redis = Redis(host=redis_info["host"], password=redis_info["password"])
+    redis = Redis(host=redis_info["host"],
+                  password=redis_info["password"],
+                  retry_on_error=[ConnectionError, TimeoutError],
+                  retry=Retry(ExponentialBackoff(cap=10, base=1), 25))
+
     unsent_rollouts = deque([], maxlen=100)
     while True:
         while q.poll():
@@ -29,7 +36,7 @@ def rollout_uploader(redis_info, q):
 
         if len(unsent_rollouts) > 0:
             for _ in range(len(unsent_rollouts)):
-                rollout_bytes = unsent_rollouts.popleft()
+                rollout_bytes = _serialize(unsent_rollouts.popleft())
                 n_items = redis.rpush(ROLLOUTS, rollout_bytes)
                 if n_items >= 1000:
                     print("Had to limit rollouts. Learner may have have crashed, or is overloaded")
@@ -380,8 +387,10 @@ class RedisRolloutWorker:
                 #                               obs_build_factory=lambda: self.match._obs_builder,
                 #                               rew_func_factory=lambda: self.match._reward_fn,
                 #                               act_parse_factory=lambda: self.match._action_parser)
-                rollout_bytes = _serialize((rollout_data, versions, self.uuid, self.name, result,
-                                            self.send_obs, self.send_gamestates, True))
+                # rollout_bytes = _serialize((rollout_data, versions, self.uuid, self.name, result,
+                #                             self.send_obs, self.send_gamestates, True))
+                rollout_bytes = (rollout_data, versions, self.uuid, self.name, result,self.send_obs,
+                                 self.send_gamestates, True)
 
                 def send():
                     self.rollout_q.send(rollout_bytes)

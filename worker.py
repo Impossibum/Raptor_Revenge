@@ -5,25 +5,24 @@ from rlgym.envs import Match
 from rlgym.utils.terminal_conditions.common_conditions import TimeoutCondition, NoTouchTimeoutCondition, GoalScoredCondition
 from custom_obs import AdvancedBullShitter
 from N_Parser import NectoAction
-#from rocket_learn.rollout_generator.redis.redis_rollout_worker import RedisRolloutWorker
+from redis.retry import Retry
+from redis.backoff import ExponentialBackoff
+from redis.exceptions import ConnectionError, TimeoutError
 from redis_rollout_worker import RedisRolloutWorker
 from rl_five_reward import RLFiveReward
 from kb_setter import KB_Setter
 from rewards import StarterReward
 import torch
-#import faulthandler
 torch.set_num_threads(1)
 
 
 if __name__ == "__main__":
-    #faulthandler.enable()
     tick_skip = 12
     fps = 120/tick_skip
     send_state = False
     cache_writer = False
     if int(sys.argv[1]) == 0:
-    	send_state = True
-    	cache_writer = True
+        cache_writer = True
     match = Match(
         game_speed=100,
         spawn_opponents=True,
@@ -35,28 +34,40 @@ if __name__ == "__main__":
         reward_function=RLFiveReward(),
         tick_skip=tick_skip
     )
-
     # LINK TO THE REDIS SERVER YOU SHOULD HAVE RUNNING (USE THE SAME PASSWORD YOU SET IN THE REDIS
     # CONFIG)
     redis_info = {
-        "host": "127.0.0.1",
-        "password": os.environ["redis"],
+        "host": os.environ["REDIS_HOST"] if "REDIS_HOST" in os.environ else "localhost",
+        "password": os.environ["REDIS_PASSWORD"] if "REDIS_PASSWORD" in os.environ else None,
     }
 
-    r = Redis(host=redis_info["host"], password=redis_info["password"])
+    r = Redis(host=redis_info["host"],
+              password=redis_info["password"],
+              retry_on_error=[ConnectionError, TimeoutError],
+              retry=Retry(ExponentialBackoff(cap=10, base=1), 25))
 
-    RedisRolloutWorker(r, "Impossibum", match,
-                       past_version_prob=0.0,
-                       evaluation_prob=0.0,
-                       sigma_target=2,
-                       dynamic_gm=True,
-                       send_obs=True,
-                       streamer_mode=False,
-                       send_gamestates=send_state,
-                       force_paging=True,
-                       auto_minimize=True,
-                       local_cache_name="raptor_model_database",
-                       redis_info=redis_info,
-                       #local_cache_name=None,
-                       cache_writer=cache_writer).run()
+    contributor_name = os.environ["CONTRIBUTOR_NAME"] if "CONTRIBUTOR_NAME" in os.environ else "unknown"
+    worker = RedisRolloutWorker(r, contributor_name, match,
+                                past_version_prob=0.0,
+                                evaluation_prob=0.0,
+                                sigma_target=2,
+                                dynamic_gm=True,
+                                send_obs=True,
+                                streamer_mode=False,
+                                send_gamestates=send_state,
+                                force_paging=True,
+                                auto_minimize=True,
+                                local_cache_name="raptor_model_database",
+                                redis_info=redis_info,
+                                cache_writer=cache_writer)
+
+    try:
+        worker.run()
+    except KeyboardInterrupt:
+        worker.env.close()
+        sys.exit(0)
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        worker.env.close()
+        sys.exit(1)
 
