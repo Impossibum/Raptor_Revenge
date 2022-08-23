@@ -126,13 +126,17 @@ class RedisRolloutWorker:
                   "under name", name)  # TODO log instead
         else:
             print("Streaming mode set. Running silent.")
-
-        self.current_agent = None
         self.newest_available = int(self.redis.get(VERSION_LATEST))
-        while self.current_agent is None:
-            self.current_agent = self._get_latest_model(self.newest_available)
-            if self.current_agent is None:
-                time.sleep(5)
+
+        if not self.local_cache_name:
+            bytestream = self.redis.get(MODEL_LATEST)
+            self.current_agent = _unserialize_model(bytestream)
+        else:
+            self.current_agent = None
+            while self.current_agent is None:
+                self.current_agent = self._get_latest_model(self.newest_available)
+                if self.current_agent is None:
+                    time.sleep(5)
 
         self.scoreboard = scoreboard
         state_setter = DynamicGMSetter(match._state_setter)  # noqa Rangler made me do it
@@ -293,6 +297,7 @@ class RedisRolloutWorker:
 
         latest_version = available_version
         count = 0
+        cached_blue, cached_orange = self.select_gamemode()
         while True:
             # Get the most recent version available
             updated_agent = None
@@ -301,6 +306,7 @@ class RedisRolloutWorker:
                 if count >= 25:
                     available_version = int(self.redis.get(VERSION_LATEST))
                     count = 0
+                    cached_blue, cached_orange = self.select_gamemode()
             else:
                 available_version = int(self.redis.get(VERSION_LATEST))
 
@@ -323,7 +329,11 @@ class RedisRolloutWorker:
             pretrained_choice = None
 
             if self.dynamic_gm:
-                blue, orange = self.select_gamemode()
+                if self.local_cache_name:
+                    blue = cached_blue
+                    orange = cached_orange
+                else:
+                    blue, orange = self.select_gamemode()
             else:
                 blue = orange = self.match.agents // 2
             self.set_team_size(blue, orange)
