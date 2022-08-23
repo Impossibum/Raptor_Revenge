@@ -21,8 +21,9 @@ if __name__ == "__main__":
     fps = 120/tick_skip
     send_state = False
     cache_writer = False
-    if int(sys.argv[1]) == 0:
-        cache_writer = True
+    # if int(sys.argv[1]) == 0:
+    #     send_state = True
+    #     cache_writer = True
     match = Match(
         game_speed=100,
         spawn_opponents=True,
@@ -58,6 +59,7 @@ if __name__ == "__main__":
                                 force_paging=True,
                                 auto_minimize=True,
                                 local_cache_name="raptor_model_database",
+                                #local_cache_name=None,
                                 redis_info=redis_info,
                                 cache_writer=cache_writer)
 

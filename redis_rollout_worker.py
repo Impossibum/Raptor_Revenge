@@ -92,18 +92,15 @@ class RedisRolloutWorker:
             print("** WARNING - Human Player and Pretrained Agents are in conflict. **")
             print("**           Pretrained Agents will be ignored.                  **")
 
+        self.local_cache_name = local_cache_name
+        self.cache_writer = cache_writer
         self.streamer_mode = streamer_mode
-
-        self.current_agent = _unserialize_model(self.redis.get(MODEL_LATEST))
         self.past_version_prob = past_version_prob
         self.evaluation_prob = evaluation_prob
         self.sigma_target = sigma_target
         self.send_gamestates = send_gamestates
         self.send_obs = send_obs
         self.dynamic_gm = dynamic_gm
-        self.local_cache_name = local_cache_name
-        self.cache_writer = cache_writer
-
         self.uuid = str(uuid4())
         self.redis.rpush(WORKER_IDS, self.uuid)
         rollout_local, rollout_p = Pipe()
@@ -129,6 +126,13 @@ class RedisRolloutWorker:
                   "under name", name)  # TODO log instead
         else:
             print("Streaming mode set. Running silent.")
+
+        self.current_agent = None
+        self.newest_available = int(self.redis.get(VERSION_LATEST))
+        while self.current_agent is None:
+            self.current_agent = self._get_latest_model(self.newest_available)
+            if self.current_agent is None:
+                time.sleep(5)
 
         self.scoreboard = scoreboard
         state_setter = DynamicGMSetter(match._state_setter)  # noqa Rangler made me do it
@@ -234,9 +238,8 @@ class RedisRolloutWorker:
 
         return model
 
-
     #@functools.lru_cache(maxsize=8)
-    def _get_latest_model(self, version, current_model):
+    def _get_latest_model(self, version):
         # if version in local database, query from database
         # if not, pull from REDIS and store in disk cache
 
@@ -282,21 +285,29 @@ class RedisRolloutWorker:
         begin processing in already launched match and push to redis
         """
         n = 0
-        latest_version = None
-        # t = Thread()
-        # t.start()
+
+        if self.local_cache_name is None:
+            available_version = int(self.redis.get(VERSION_LATEST))
+        else:
+            available_version = self.newest_available
+
+        latest_version = available_version
+        count = 0
         while True:
             # Get the most recent version available
-            available_version = self.redis.get(VERSION_LATEST)
-            if available_version is None:
-                time.sleep(1)
-                continue  # Wait for version to be published (not sure if this is necessary?)
-            available_version = int(available_version)
+            updated_agent = None
+            if self.local_cache_name:
+                count += 1
+                if count >= 25:
+                    available_version = int(self.redis.get(VERSION_LATEST))
+                    count = 0
+            else:
+                available_version = int(self.redis.get(VERSION_LATEST))
 
             # Only try to download latest version when new
             if latest_version != available_version:
                 if self.local_cache_name:
-                    updated_agent = self._get_latest_model(available_version, self.current_agent)
+                    updated_agent = self._get_latest_model(available_version)
                 else:
                     model_bytes = self.redis.get(MODEL_LATEST)
                     if model_bytes is None:
